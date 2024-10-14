@@ -98,6 +98,8 @@ class ImageStream(shmio.Image):
     def __init__(self, name, expected_shape=None):
         super().__init__()
         self._write = super().write
+        self._increment_cnt2 = super().increment_cnt2
+        self._get_kws = super().get_kws
         self.name = name
         self.is_open = False
         self.open()
@@ -187,6 +189,41 @@ class ImageStream(shmio.Image):
     def grab_after(self, n, nwait):
         cnt0 = self.md.cnt0
         return self.grab_many(n, cnt0_min=cnt0+nwait)
+
+    @_is_open
+    def grab_event(self, event, n=1, skip=0):
+        # logger.info(f'grab_event event {event}, frames {n}, skip {skip} current event {self.md.cnt2}')
+        if (self.event_count == event):
+            # logger.info(f'grab_after event {event}, frames {n}, skip {skip} current event {self.md.cnt2}')
+            return self.grab_after(n, skip)
+        else:
+            sleep(0.01) # wait for self.md.cnt2 to catch up before retrying
+            # logger.info(f'bad self.md.cnt2 {self.md.cnt2} event {event}')
+            # self.trigger_event()
+            return self.grab_event(event, n, skip)
+
+    @property
+    @_is_open
+    def frame_count(self):
+        return self.md.cnt1
+    
+    @_is_open
+    def trigger_event(self):
+        return self._increment_cnt2()
+    
+    @property
+    @_is_open
+    def event_count(self):
+        return self.md.cnt2
+
+    @property
+    def shape(self):
+        return self.md.size
+
+    @property
+    def keywords(self):
+        return self._get_kws()
+
 
 class AsynchronousImageStream(mp.Process):
     '''
